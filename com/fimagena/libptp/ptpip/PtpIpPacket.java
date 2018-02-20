@@ -430,10 +430,6 @@ public abstract class PtpIpPacket {
         public Error(Exception e) {this(); mException = e;}
     }
 
-    public static class Closed extends InternalPacket {
-        public Closed() {super(PKT_Invalid);}
-    }
-
     public static class LoadStatus extends InternalPacket {
         public PtpIpPacket mLoadedPacket;
         public int mLoadedBytes;

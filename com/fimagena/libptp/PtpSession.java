@@ -24,23 +24,26 @@ public class PtpSession {
 
     public interface DataLoadListener {void onDataLoaded(long loaded, long expected);}
 
+    private PtpConnection mConnection;
     private PtpTransport.Session mSession;
-    private PtpDataType.DeviceInfoDataSet mDeviceInfo;
 
 
-    protected PtpSession(PtpTransport.Session session, PtpDataType.DeviceInfoDataSet deviceInfo) {
+    protected PtpSession(PtpConnection connection, PtpTransport.Session session) {
+        mConnection = connection;
         mSession = session;
-        mDeviceInfo = deviceInfo;
     }
     // TODO..: check deviceInfo which functions are allowed
 
-    public void close() throws PtpTransport.TransportError, PtpExceptions.PtpProtocolViolation {mSession.close();}
+    public void close() throws PtpTransport.TransportError, PtpExceptions.PtpProtocolViolation {
+        mSession.close();
+        mConnection.onSessionClosed(this);
+    }
 
     // -----------------------------------------------------------------------------------------
     // PTP transaction
     // TODO: asynchronous requests should return transactionID as well
 
-    public PtpDataType.DeviceInfoDataSet getDeviceInfo() {return mDeviceInfo;}
+    public PtpConnection getConnection() {return mConnection;}
 
     public PtpDataType.StorageID[] getStorageIDs() throws PtpTransport.TransportError, PtpExceptions.PtpProtocolViolation, PtpExceptions.OperationFailed {
         PtpOperation.Response response = mSession.executeTransaction(PtpOperation.createRequest(PtpOperation.OPSCODE_GetStorageIDs));

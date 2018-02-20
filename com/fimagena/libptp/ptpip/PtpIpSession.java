@@ -36,22 +36,21 @@ public class PtpIpSession implements PtpTransport.Session {
     private long mLastTransactionId;
     private boolean mIsOpened = false;
 
-    private BlockingDeque<PtpIpPacket> mIncomingTransactionPacketQueue = new LinkedBlockingDeque<>(PtpIpConnection.MAX_QUEUE_SIZE);
+    private BlockingDeque<PtpIpPacket> mTransactionPacketInQueue;
 
     private enum TransactionStatus {REQUEST_SENT, DATA_STARTED, DATA_ENDED, RESPONSE_RECEIVED}
 
     private final static Logger LOG = Logger.getLogger(Logger.GLOBAL_LOGGER_NAME);
 
 
-    public PtpIpSession(PtpIpConnection ptpIpConnection) {
+    public PtpIpSession(PtpIpConnection ptpIpConnection, BlockingDeque<PtpIpPacket> transactionPacketInQueue) {
         mPtpIpConnection = ptpIpConnection;
         mLastTransactionId = 0;
+        mTransactionPacketInQueue = transactionPacketInQueue;
     }
 
-    protected void setOpened() {mIsOpened = true;}
+    protected void setOpened(boolean isOpened) {mIsOpened = isOpened;}
     protected boolean isOpened() {return mIsOpened;}
-
-    protected BlockingQueue<PtpIpPacket> getQueue() {return mIncomingTransactionPacketQueue;}
 
     private void testStatus(TransactionStatus currentStatus, TransactionStatus expectedStatus, PtpIpPacket packet) throws PtpIpExceptions.ProtocolViolation {
         testStatus(currentStatus, new TransactionStatus[] {expectedStatus}, packet);
@@ -107,7 +106,12 @@ public class PtpIpSession implements PtpTransport.Session {
         PtpOperation.Response response = PtpOperation.createResponse(request);
 
         while (status != TransactionStatus.RESPONSE_RECEIVED) {
-            PtpIpPacket packet = TcpConnection.takeBlocking(mIncomingTransactionPacketQueue);
+            // takeBlocking
+            PtpIpPacket packet = null;
+            while (packet == null) {try {packet = mTransactionPacketInQueue.take();} catch (InterruptedException e) {}}
+
+            // if Error --> throw Exception
+            PtpIpExceptions.testError(packet);
 
             // if LoadStatus --> report onwards if we're receiving data and have a listener
             if (packet instanceof PtpIpPacket.LoadStatus) {
@@ -116,12 +120,6 @@ public class PtpIpSession implements PtpTransport.Session {
                     testStatus(status, new TransactionStatus[]{TransactionStatus.DATA_STARTED, TransactionStatus.DATA_ENDED}, packet);
                     if (listener != null) listener.onDataLoaded(request, dataIn.size() + ((PtpIpPacket.LoadStatus) packet).mLoadedBytes - 8, dataIn.size() + dataRemaining);
                 }
-            }
-
-            //
-            else if ((packet instanceof PtpIpPacket.Error) || (packet instanceof PtpIpPacket.Closed)){
-                PtpIpExceptions.testError(packet);
-                // FIXME: what about close? currently ignored but not correct
             }
 
             // if Event (must be cancel) --> abort if right transaction ID
@@ -136,7 +134,7 @@ public class PtpIpSession implements PtpTransport.Session {
                 throw new PtpIpExceptions.OperationFailed("Device cancelled transaction!", 0);
             }
 
-            // if TransactionPacket --> check transactionId and process packettypes
+            // if TransactionPacket --> check transactionId and process packet-types
             else if (packet instanceof PtpIpPacket.TransactionPacket) {
                 if (((PtpIpPacket.TransactionPacket) packet).mTransactionId != transactionId)
                     throw new PtpIpExceptions.ProtocolViolation("Received wrong transaction-Id. Expected " + transactionId + ", received " + ((PtpIpPacket.TransactionPacket) packet).mTransactionId);
@@ -159,7 +157,7 @@ public class PtpIpSession implements PtpTransport.Session {
                     dataRemaining -= payload.length;
                     if (dataRemaining < 0) throw new PtpIpExceptions.ProtocolViolation("Received Data but longer than announced!");
                     dataIn.writeObject(payload);
-                    mIncomingTransactionPacketQueue.offerFirst(new PtpIpPacket.LoadStatus(packet, 0));
+                    mTransactionPacketInQueue.offerFirst(new PtpIpPacket.LoadStatus(packet, 0));
                 }
 
                 // if EndData --> check state and move to response expected
@@ -170,7 +168,7 @@ public class PtpIpSession implements PtpTransport.Session {
                     if (dataRemaining != 0) throw new PtpIpExceptions.ProtocolViolation("Received EndData but was expecting " + dataRemaining + " more; (EndData payload: " + payload.length);
                     dataIn.writeObject(payload);
                     status = TransactionStatus.DATA_ENDED;
-                    if (payload.length != 0) mIncomingTransactionPacketQueue.offerFirst(new PtpIpPacket.LoadStatus(packet, 0));
+                    if (payload.length != 0) mTransactionPacketInQueue.offerFirst(new PtpIpPacket.LoadStatus(packet, 0));
                 }
 
                 // if OperationResponse --> check state and complete transaction
@@ -197,7 +195,7 @@ public class PtpIpSession implements PtpTransport.Session {
     }
 
     @Override public void close() throws PtpTransport.TransportDataError, PtpTransport.TransportIOError, PtpTransport.TransportOperationFailed, PtpExceptions.PtpProtocolViolation {
-        if (!mIsOpened) return;
+        if (!isOpened()) return;
         PtpOperation.Response response = executeTransaction(PtpOperation.createRequest(PtpOperation.OPSCODE_CloseSession));
         response.validate();
         if (!response.isSuccess()) throw new PtpIpExceptions.OperationFailed("CloseSession", response.getResponseCode());

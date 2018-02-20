@@ -28,7 +28,9 @@ import com.fimagena.libptp.PtpTransport;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -55,6 +57,8 @@ public class PtpIpConnection extends PtpTransport {
 
         public PtpIpAddress(InetAddress address) {this(address, PTP_PORT);}
         public PtpIpAddress(InetAddress address, int port) {mTcpAddress = new InetSocketAddress(address, port);}
+
+        public String toString() {return mTcpAddress.toString();}
     }
 
 
@@ -79,28 +83,36 @@ public class PtpIpConnection extends PtpTransport {
     private TcpConnection mCommandConnection;
     private TcpConnection mEventConnection;
 
-    // Queues we own
-    private BlockingQueue<PtpIpPacket> mIncomingPacketQueue = new LinkedBlockingQueue<>(MAX_QUEUE_SIZE);
-    private BlockingQueue<PtpIpPacket> mInitPacketQueue     = new LinkedBlockingQueue<>(MAX_QUEUE_SIZE);
+    // TcpConnections send us PtpPackets in our incoming queue...
+    private BlockingDeque<PtpIpPacket> mPacketInQueue             = new LinkedBlockingDeque<>(MAX_QUEUE_SIZE);
 
-    // Queues we don't own
-    private BlockingQueue<PtpIpPacket> mTransactionPacketQueue;
-    private BlockingQueue<PtpEvent>    mEventQueue;
+    // ...which we then distribute into various outgoing queues
+    private BlockingQueue<PtpIpPacket> mInitPacketOutQueue        = new LinkedBlockingQueue<>(MAX_QUEUE_SIZE);
+    private BlockingDeque<PtpIpPacket> mTransactionPacketOutQueue = new LinkedBlockingDeque<>(MAX_QUEUE_SIZE);
+    private BlockingQueue<PtpEvent>    mEventOutQueue             = new LinkedBlockingQueue<>(MAX_QUEUE_SIZE);
+
+    @Override public BlockingQueue<PtpEvent> getEventQueue() {return mEventOutQueue;}
 
     private enum ConnectionStatus {INITIALIZED, CONNECTED, CLOSED}
     private ConnectionStatus mStatus;
 
-    private PtpIpSession mSingleSession = new PtpIpSession(this);
+    private PtpIpSession mSingleSession;
 
+    private PtpIpPacketListener mPtpIpPacketListener;
 
-    private class PtpIpListener extends Thread {
+    private class PtpIpPacketListener extends Thread {
+
+        private void putBlocking(BlockingQueue<PtpIpPacket> queue, PtpIpPacket packet) {
+            while (true) {try {queue.put(packet); return;} catch (InterruptedException e) {}}
+        }
+
+        private void putFirstBlocking(BlockingDeque<PtpIpPacket> queue, PtpIpPacket packet) {
+            while (true) {try {queue.putFirst(packet); return;} catch (InterruptedException e) {}}
+        }
 
         private void putEvent(PtpEvent event) {
-            if (mEventQueue == null) return;
-            while (true) {
-                try {mEventQueue.put(event); return;}
-                catch (InterruptedException e) {}
-            }
+            if (mEventOutQueue == null) return;
+            while (true) {try {mEventOutQueue.put(event); return;} catch (InterruptedException e) {}}
         }
 
         public void run() {
@@ -110,29 +122,42 @@ public class PtpIpConnection extends PtpTransport {
                 // ---------------------------------------------------------------------------------
                 // Check time since last traffic and send ping if over timeout value
 
-                long remaining = PING_TIMEGAP - (System.currentTimeMillis() - Math.max(mCommandConnection.getTimestamp(), mEventConnection.getTimestamp()));
+                long remaining = PING_TIMEGAP - (System.currentTimeMillis() - Math.max(mCommandConnection.getLastActivityTimestamp(), mEventConnection.getLastActivityTimestamp()));
                 if (remaining <= 0) {
                     // Sending ping when timing out; however, we're ignoring the pongs
                     try {mEventConnection.sendPacket(new PtpIpPacket.ProbeRequest());} catch (IOException e) {}
                     remaining = PING_TIMEGAP;
                 }
-                try {
-                    packet = mIncomingPacketQueue.poll(remaining, TimeUnit.MILLISECONDS);
-                }
-                catch (InterruptedException e) {continue;}
+                try {packet = mPacketInQueue.poll(remaining, TimeUnit.MILLISECONDS);} catch (InterruptedException e) {continue;}
                 if (packet == null) continue;
 
                 // ---------------------------------------------------------------------------------
                 // Process packets according to type
 
+                // ---------------------------------------------------------------------------------
+                // Internal packets
+
                 // if LoadStatus for a transaction --> send onwards
                 if (packet instanceof PtpIpPacket.LoadStatus) {
                     if (((PtpIpPacket.LoadStatus) packet).mLoadedPacket instanceof PtpIpPacket.TransactionPacket)
-                        TcpConnection.putBlocking(mTransactionPacketQueue, packet);
+                        putBlocking(mTransactionPacketOutQueue, packet);
                 }
 
-                // if InternalPacket --> must be Error or Close --> close down
-                else if (packet instanceof PtpIpPacket.InternalPacket) close();
+                // if Error --> something happened, let's close down and tell everybody
+                else if (packet instanceof PtpIpPacket.Error) {
+                    // close downward stack
+                    close();
+
+                    mSingleSession.setOpened(false);
+
+                    // tell upward stack
+                    putBlocking(mInitPacketOutQueue, packet);
+                    putBlocking(mTransactionPacketOutQueue, packet);
+                    putEvent(new PtpEvent.Error(((PtpIpPacket.Error) packet).mException));
+                }
+
+                // ---------------------------------------------------------------------------------
+                // Probing packets
 
                 // if Ping --> send Pong
                 else if (packet instanceof PtpIpPacket.ProbeRequest) {
@@ -143,62 +168,63 @@ public class PtpIpConnection extends PtpTransport {
                 // if Pong --> ignore
                 else if (packet instanceof PtpIpPacket.ProbeResponse) {}
 
+                // ---------------------------------------------------------------------------------
+                // Init packets
+
+                // if InitPacket --> check for correct state and send onwards
+                else if (packet instanceof PtpIpPacket.InitPacket) {
+                    if (mStatus == ConnectionStatus.INITIALIZED) putBlocking(mInitPacketOutQueue, packet);
+                    else {
+                        LOG.severe("PTPIP: Protocol violation (received InitPacket but not in Init state) - closing connection!");
+                        putFirstBlocking(mPacketInQueue, new PtpIpPacket.Error(new PtpIpExceptions.ProtocolViolation("Wrong PacketType: Received InitPacket but not in Init state!")));
+                    }
+                }
+
+                // ---------------------------------------------------------------------------------
+                // Transaction packets
+
                 // if Event --> send a layer upwards (and cancel also onwards to be sure)
                 else if (packet instanceof PtpIpPacket.Event) {
                     PtpIpPacket.Event eventPacket = (PtpIpPacket.Event) packet;
                     putEvent(new PtpEvent(new PtpDataType.EventCode(eventPacket.mEventCode), new PtpDataType.UInt32(eventPacket.mTransactionId), eventPacket.mParameters));
-                    if (((PtpIpPacket.Event) packet).mEventCode == PtpEvent.EVENTCODE_CancelTransaction) TcpConnection.putBlocking(mTransactionPacketQueue, packet);
-                }
-
-                // if InitPacket --> check for correct state and send onwards
-                else if (packet instanceof PtpIpPacket.InitPacket) {
-                    if (mStatus == ConnectionStatus.INITIALIZED) TcpConnection.putBlocking(mInitPacketQueue, packet);
-                    else {
-                        LOG.severe("PTPIP: Protocol violation (received InitPacket but not in Init state) - closing connection!");
-                        packet = new PtpIpPacket.Error(new PtpIpExceptions.ProtocolViolation("Wrong PacketType: Received InitPacket but not in Init state!"));
-                        close();
-                    }
+                    if (eventPacket.mEventCode == PtpEvent.EVENTCODE_CancelTransaction) putBlocking(mTransactionPacketOutQueue, packet);
                 }
 
                 // if TransactionPacket --> check for correct state and send onwards
                 else if (packet instanceof PtpIpPacket.TransactionPacket) {
-                    if (mStatus == ConnectionStatus.CONNECTED)
-                        TcpConnection.putBlocking(mTransactionPacketQueue, packet);
+                    if (mStatus == ConnectionStatus.CONNECTED) putBlocking(mTransactionPacketOutQueue, packet);
                     else {
                         LOG.severe("PTPIP: Protocol violation (received TransactionPacket but not in Connected state) - closing connection!");
-                        packet = new PtpIpPacket.Error(new PtpIpExceptions.ProtocolViolation("Wrong PacketType: Received TransactionPacket but not in Connected state!"));
-                        close();
+                        putFirstBlocking(mPacketInQueue, new PtpIpPacket.Error(new PtpIpExceptions.ProtocolViolation("Wrong PacketType: Received TransactionPacket but not in Connected state!")));
                     }
                 }
 
+                // ---------------------------------------------------------------------------------
                 // if Other --> can't happen, there is nothing else --> Error
                 else {
                     LOG.severe("PTPIP: Encountered unknown internal packet type!");
-                    packet = new PtpIpPacket.Error(new PtpIpExceptions.MalformedPacket("Unknown internal packet type!"));
-                    close();
+                    putFirstBlocking(mPacketInQueue, new PtpIpPacket.Error(new PtpIpExceptions.MalformedPacket("Unknown internal packet type!")));
                 }
             }
 
-            // ---------------------------------------------------------------------------------
-            // We're done - let's tell everyone
-
-            if (!(packet instanceof PtpIpPacket.InternalPacket)) packet = new PtpIpPacket.Closed();
-            TcpConnection.putBlocking(mInitPacketQueue, packet);
-            TcpConnection.putBlocking(mTransactionPacketQueue, packet);
-            putEvent(new PtpEvent.InternalEvent(packet instanceof PtpIpPacket.Closed ? PtpEvent.InternalEvent.Type.CLOSED : PtpEvent.InternalEvent.Type.ERROR, packet instanceof PtpIpPacket.Closed ? null : ((PtpIpPacket.Error) packet).mException));
+            // We're done listening, remove reference - not strictly necessary but the Thread is toast - might as well clean up resources
+            mPtpIpPacketListener = null;
         }
     }
 
-    public PtpIpConnection() {
-        mCommandConnection = new TcpConnection(mIncomingPacketQueue);
-        mEventConnection = new TcpConnection(mIncomingPacketQueue);
+    public PtpIpConnection() {this(null);}
+    public PtpIpConnection(BlockingQueue<PtpEvent> eventOutQueue){
+        // we use only one packet-queue for both TCP-channels
+        mCommandConnection = new TcpConnection(mPacketInQueue);
+        mEventConnection   = new TcpConnection(mPacketInQueue);
 
-        mTransactionPacketQueue = mSingleSession.getQueue();
+        // ability to set EventOutQueue only used for add'l session based on add'l connection with same EventQueue
+        if (eventOutQueue != null) mEventOutQueue = eventOutQueue;
+
+        mSingleSession = new PtpIpSession(this, mTransactionPacketOutQueue);
 
         mStatus = ConnectionStatus.INITIALIZED;
     }
-
-    @Override public void setEventQueue(BlockingQueue<PtpEvent> eventQueue) {mEventQueue = eventQueue;}
 
     @Override public PtpDataType.DeviceInfoDataSet getDeviceInfo() throws TransportDataError, TransportIOError, TransportOperationFailed, PtpExceptions.PtpProtocolViolation {
         PtpOperation.Response response = mSingleSession.executeNullTransaction(PtpOperation.createRequest(PtpOperation.OPSCODE_GetDeviceInfo));
@@ -207,15 +233,12 @@ public class PtpIpConnection extends PtpTransport {
         return (PtpDataType.DeviceInfoDataSet) response.getData();
     }
 
-    @Override public PtpTransport.Session openSession() throws TransportDataError, TransportIOError, TransportOperationFailed, PtpExceptions.PtpProtocolViolation {return openSession(null);}
-    @Override public PtpTransport.Session openSession(BlockingQueue<PtpEvent> eventQueue) throws TransportDataError, TransportIOError, TransportOperationFailed, PtpExceptions.PtpProtocolViolation {
+    @Override public PtpTransport.Session openSession() throws TransportDataError, TransportIOError, TransportOperationFailed, PtpExceptions.PtpProtocolViolation {
         if (mSingleSession.isOpened()) {
-            PtpIpConnection connection = new PtpIpConnection();
-            connection.setEventQueue(eventQueue == null ? mEventQueue : eventQueue);
+            PtpIpConnection connection = new PtpIpConnection(mEventOutQueue);
             connection.connect(mAddress, mHostId);
             return connection.openSession();
-            //TODO...: if session on additional connection is closed, connection should be closed or cached for re-use
-            //TODO: who closes additional PtpIpConnection eventually?
+            //FIXME: add'l connection is never properly closed - no reference is being held
         }
 
         PtpOperation.Request request = PtpOperation.createRequest(PtpOperation.OPSCODE_OpenSession);
@@ -223,9 +246,7 @@ public class PtpIpConnection extends PtpTransport {
         PtpOperation.Response response = mSingleSession.executeNullTransaction(request);
         response.validate();
         if (!response.isSuccess()) throw new PtpIpExceptions.OperationFailed("OpenSession", response.getResponseCode());
-        mSingleSession.setOpened();
-        if (eventQueue != null) mEventQueue = eventQueue;
-        // FIXME: if closing session with new eventqueue, connection event packets go to new queue anyway --> right semantics? --> we should probably cache connection queue? also need to check that both queues aren't identical so we're not sending double packets on one queue...
+        mSingleSession.setOpened(true);
 
         return mSingleSession;
     }
@@ -241,7 +262,9 @@ public class PtpIpConnection extends PtpTransport {
         }
         catch (IOException e) {close(); throw new PtpIpExceptions.IOError("Could not connect channel!", e);}
 
-        PtpIpPacket packet = TcpConnection.takeBlocking(mInitPacketQueue);
+        // takeBlocking
+        PtpIpPacket packet = null;
+        while (packet == null) {try {packet = mInitPacketOutQueue.take();} catch (InterruptedException e) {}}
 
         if (packet instanceof PtpIpPacket.InitFail)
             throw new PtpIpExceptions.OperationFailed("InitRequest", ((PtpIpPacket.InitFail) packet).mReason);
@@ -257,7 +280,8 @@ public class PtpIpConnection extends PtpTransport {
         mHostId = (PtpIpHostId) hostId;
         mAddress = (PtpIpAddress) address;
 
-        new PtpIpListener().start();
+        mPtpIpPacketListener = new PtpIpPacketListener();
+        mPtpIpPacketListener.start();
 
         // -----------------------------------------------------------------------------------------
         // Open command and event channel
@@ -276,8 +300,15 @@ public class PtpIpConnection extends PtpTransport {
 
 
     @Override public boolean isClosed() {return mStatus == ConnectionStatus.CLOSED;}
+
     public void close() {
+        // stop listening
         mStatus = ConnectionStatus.CLOSED;
+        if (mPtpIpPacketListener != null) mPtpIpPacketListener.interrupt();
+
+        mSingleSession.setOpened(false);
+
+        // shutdown TCP connections without further noise
         mEventConnection.close();
         mCommandConnection.close();
     }

@@ -25,15 +25,12 @@ import java.util.Map;
 
 public class PtpEvent {
 
-    public static class InternalEvent extends PtpEvent {
+    public static class Error extends PtpEvent {
         protected Exception mException;
-        public enum Type {ERROR, CLOSED}
-        protected Type mType;
 
-        public InternalEvent(Type type) {this(type, null);}
-        public InternalEvent(Type type, Exception e) {
+        public Error() {this(null);}
+        public Error(Exception e) {
             super(new PtpDataType.EventCode(EVENTCODE_Internal));
-            mType = type;
             mException = e;
         }
     }

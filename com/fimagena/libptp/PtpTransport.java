@@ -70,12 +70,11 @@ public abstract class PtpTransport {
     }
 
 
-    public abstract void setEventQueue(BlockingQueue<PtpEvent> eventQueue);
+    public abstract BlockingQueue<PtpEvent> getEventQueue();
 
     public abstract PtpDataType.DeviceInfoDataSet getDeviceInfo() throws TransportOperationFailed, TransportDataError, TransportIOError, PtpExceptions.PtpProtocolViolation;
 
     public abstract Session openSession() throws TransportOperationFailed, TransportDataError, TransportIOError, PtpExceptions.PtpProtocolViolation;
-    public abstract Session openSession(BlockingQueue<PtpEvent> eventQueue) throws TransportOperationFailed, TransportDataError, TransportIOError, PtpExceptions.PtpProtocolViolation;
 
     public abstract boolean isConnected();
     public abstract void connect(ResponderAddress address, HostId hostId) throws TransportOperationFailed, TransportDataError, TransportIOError;
