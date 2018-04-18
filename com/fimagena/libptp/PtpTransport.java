@@ -56,16 +56,16 @@ public abstract class PtpTransport {
 
 
     public interface PayloadBuffer {
-        PayloadBuffer writeUInt8(short value);
-        PayloadBuffer writeUInt16(int value);
-        PayloadBuffer writeUInt32(long value);
-        PayloadBuffer writeUInt64(long value);
+        PayloadBuffer writeUInt8 (short  value);
+        PayloadBuffer writeUInt16(int    value);
+        PayloadBuffer writeUInt32(long   value);
+        PayloadBuffer writeUInt64(long   value);
         PayloadBuffer writeObject(byte[] object);
 
-        short readUInt8() throws TransportDataError;
-        int readUInt16() throws TransportDataError;
-        long readUInt32() throws TransportDataError;
-        long readUInt64() throws TransportDataError;
+        short  readUInt8 () throws TransportDataError;
+        int    readUInt16() throws TransportDataError;
+        long   readUInt32() throws TransportDataError;
+        long   readUInt64() throws TransportDataError;
         byte[] readObject();
     }
 

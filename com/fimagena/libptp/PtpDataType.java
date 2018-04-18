@@ -29,7 +29,7 @@ import java.util.Date;
 public abstract class PtpDataType {
 
     protected abstract void write(PtpTransport.PayloadBuffer out);
-    protected abstract void read(PtpTransport.PayloadBuffer in) throws PtpTransport.TransportDataError, PtpExceptions.MalformedDataType;
+    protected abstract void read (PtpTransport.PayloadBuffer in ) throws PtpTransport.TransportDataError, PtpExceptions.MalformedDataType;
     @Override public String toString() {return "";}
 
     public void writeToBuffer(PtpTransport.PayloadBuffer out) {write(out);}
@@ -43,7 +43,7 @@ public abstract class PtpDataType {
         public int mValue;
 
         @Override protected void write(PtpTransport.PayloadBuffer out) {out.writeUInt16(mValue);}
-        @Override protected void read(PtpTransport.PayloadBuffer in) throws PtpTransport.TransportDataError {mValue = in.readUInt16();}
+        @Override protected void read (PtpTransport.PayloadBuffer in ) throws PtpTransport.TransportDataError {mValue = in.readUInt16();}
         @Override public String toString() {return String.format("0x%04x", mValue);}
         public UInt16() {}
         public UInt16(int value) {mValue = value;}
@@ -53,17 +53,17 @@ public abstract class PtpDataType {
         public long mValue;
 
         @Override protected void write(PtpTransport.PayloadBuffer out) {out.writeUInt32(mValue);}
-        @Override protected void read(PtpTransport.PayloadBuffer in) throws PtpTransport.TransportDataError {mValue = in.readUInt32();}
+        @Override protected void read (PtpTransport.PayloadBuffer in ) throws PtpTransport.TransportDataError {mValue = in.readUInt32();}
         @Override public String toString() {return String.format("0x%08x", mValue);}
         public UInt32() {}
         public UInt32(long value) {mValue = value;}
     }
 
-    public  static class UInt64 extends PtpDataType implements Serializable {
+    public static class UInt64 extends PtpDataType implements Serializable {
         public long mValue;
 
         @Override protected void write(PtpTransport.PayloadBuffer out) {out.writeUInt64(mValue);}
-        @Override protected void read(PtpTransport.PayloadBuffer in) throws PtpTransport.TransportDataError {mValue = in.readUInt64();}
+        @Override protected void read (PtpTransport.PayloadBuffer in ) throws PtpTransport.TransportDataError {mValue = in.readUInt64();}
         @Override public String toString() {return String.format("0x%016x", mValue);}
         public UInt64() {}
         public UInt64(long value) {mValue = value;}
@@ -164,10 +164,10 @@ public abstract class PtpDataType {
         public ObjectFormatCode(int value) {mValue = value;}
     }
 
-    public static class StorageID           extends UInt32 implements Serializable {public StorageID(long value) {mValue = value;} public StorageID() {}}
-    public static class ObjectHandle        extends UInt32 implements Serializable {public ObjectHandle(long value) {mValue = value;} public ObjectHandle() {}};
-    public static class AssociationCode     extends UInt16 implements Serializable {public AssociationCode(int value) {mValue = value;} public AssociationCode() {}}
-    public static class AssociationDesc     extends UInt32 implements Serializable {public AssociationDesc(int value) {mValue = value;} public AssociationDesc() {}}
+    public static class StorageID           extends UInt32 implements Serializable {public StorageID      (long value) {mValue = value;} public StorageID      () {}}
+    public static class ObjectHandle        extends UInt32 implements Serializable {public ObjectHandle   (long value) {mValue = value;} public ObjectHandle   () {}}
+    public static class AssociationCode     extends UInt16 implements Serializable {public AssociationCode(int  value) {mValue = value;} public AssociationCode() {}}
+    public static class AssociationDesc     extends UInt32 implements Serializable {public AssociationDesc(int  value) {mValue = value;} public AssociationDesc() {}}
 
     public static class PtpDateTime extends PtpString implements Serializable {
         public Date mDate = new Date();
@@ -179,34 +179,34 @@ public abstract class PtpDataType {
         @Override protected void read(PtpTransport.PayloadBuffer in) throws PtpTransport.TransportDataError, PtpExceptions.MalformedDataType {
             super.read(in);
             if ("".equals(mString)) {mDate = null; return;}
-            mDate = new SimpleDateFormat("yyyyMMdd'T'HHmmss.SZ").parse(mString, new ParsePosition(0));
-            if (mDate == null) mDate = new SimpleDateFormat("yyyyMMdd'T'HHmmssZ").parse(mString, new ParsePosition(0));
-            if (mDate == null) mDate = new SimpleDateFormat("yyyyMMdd'T'HHmmss.S").parse(mString, new ParsePosition(0));
-            if (mDate == null) mDate = new SimpleDateFormat("yyyyMMdd'T'HHmmss").parse(mString, new ParsePosition(0));
+                               mDate = new SimpleDateFormat("yyyyMMdd'T'HHmmss.SZ").parse(mString, new ParsePosition(0));
+            if (mDate == null) mDate = new SimpleDateFormat("yyyyMMdd'T'HHmmssZ"  ).parse(mString, new ParsePosition(0));
+            if (mDate == null) mDate = new SimpleDateFormat("yyyyMMdd'T'HHmmss.S" ).parse(mString, new ParsePosition(0));
+            if (mDate == null) mDate = new SimpleDateFormat("yyyyMMdd'T'HHmmss"   ).parse(mString, new ParsePosition(0));
             if (mDate == null) throw new PtpExceptions.MalformedDataType("Cannot parse Date string (\"" + mString + "\")");
         }
         @Override public String toString() {return "[" + mDate + "]";}
     }
 
-    public static class StorageIdArray    extends ArrayType<StorageID>    implements Serializable {public StorageIdArray() {super(StorageID.class);}}
+    public static class StorageIdArray    extends ArrayType<StorageID>    implements Serializable {public StorageIdArray   () {super(StorageID   .class);}}
     public static class ObjectHandleArray extends ArrayType<ObjectHandle> implements Serializable {public ObjectHandleArray() {super(ObjectHandle.class);}}
 
 
     public static class DeviceInfoDataSet extends PtpDataType implements Serializable {
-        public UInt16 mStandardVersion = new UInt16();
-        public UInt32 mVendorExtensionId = new UInt32();
-        public UInt16 mVendorExtensionVersion = new UInt16();
-        public PtpString mVendorExtensionDesc = new PtpString();
-        public UInt16 mFunctionalMode = new UInt16();
-        public ArrayType<OperationCode> mOperationsSupported = new ArrayType<>(OperationCode.class);
-        public ArrayType<EventCode> mEventsSupported = new ArrayType<>(EventCode.class);
-        public ArrayType<DevicePropCode> mDevicePropertiesSupported = new ArrayType<>(DevicePropCode.class);
-        public ArrayType<ObjectFormatCode> mCaptureFormats = new ArrayType<>(ObjectFormatCode.class);
-        public ArrayType<ObjectFormatCode> mImageFormats = new ArrayType<>(ObjectFormatCode.class);
-        public PtpString mManufacturer = new PtpString();
-        public PtpString mModel = new PtpString();
+        public UInt16    mStandardVersion        = new UInt16();
+        public UInt32    mVendorExtensionId      = new UInt32();
+        public UInt16    mVendorExtensionVersion = new UInt16();
+        public PtpString mVendorExtensionDesc    = new PtpString();
+        public UInt16    mFunctionalMode         = new UInt16();
+        public ArrayType<OperationCode>    mOperationsSupported       = new ArrayType<>(OperationCode.class);
+        public ArrayType<EventCode>        mEventsSupported           = new ArrayType<>(EventCode.class);
+        public ArrayType<DevicePropCode>   mDevicePropertiesSupported = new ArrayType<>(DevicePropCode.class);
+        public ArrayType<ObjectFormatCode> mCaptureFormats            = new ArrayType<>(ObjectFormatCode.class);
+        public ArrayType<ObjectFormatCode> mImageFormats              = new ArrayType<>(ObjectFormatCode.class);
+        public PtpString mManufacturer  = new PtpString();
+        public PtpString mModel         = new PtpString();
         public PtpString mDeviceVersion = new PtpString();
-        public PtpString mSerialNumber = new PtpString();
+        public PtpString mSerialNumber  = new PtpString();
 
         @Override protected void write(PtpTransport.PayloadBuffer out) {
             mStandardVersion.write(out);
@@ -263,14 +263,14 @@ public abstract class PtpDataType {
 
 
     public static class StorageInfoDataSet extends PtpDataType implements Serializable {
-        public UInt16 mStorageType = new UInt16();
-        public UInt16 mFileSystemType = new UInt16();
-        public UInt16 mAccessCapability = new UInt16();
-        public UInt64 mMaxCapacity = new UInt64();
-        public UInt64 mFreeSpaceInBytes = new UInt64();
+        public UInt16 mStorageType       = new UInt16();
+        public UInt16 mFileSystemType    = new UInt16();
+        public UInt16 mAccessCapability  = new UInt16();
+        public UInt64 mMaxCapacity       = new UInt64();
+        public UInt64 mFreeSpaceInBytes  = new UInt64();
         public UInt32 mFreeSpaceInImages = new UInt32();
         public PtpString mStorageDescription = new PtpString();
-        public PtpString mVolumeLabel = new PtpString();
+        public PtpString mVolumeLabel        = new PtpString();
 
         @Override protected void write(PtpTransport.PayloadBuffer out) {
             mStorageType.write(out);
@@ -406,7 +406,7 @@ public abstract class PtpDataType {
         public byte[] mObject = new byte[0];
 
         protected void write(PtpTransport.PayloadBuffer out) {out.writeObject(mObject);}
-        protected void read(PtpTransport.PayloadBuffer in) {mObject = in.readObject();}
+        protected void read (PtpTransport.PayloadBuffer in ) {mObject = in.readObject();}
         @Override public String toString() {
             String objectString= "";
             for (int i = 0; (i < mObject.length) && (i < 16); i++) objectString += String.format("%02x ", mObject[i]);
