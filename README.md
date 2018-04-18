@@ -15,9 +15,9 @@ focus is on listing and downloading files. Implementing some of the missing
 operations might be trivial - or not. Overview:
  - PTP-ops supported: *GetDeviceInfo, OpenSession, CloseSession, GetStorageIDs,
    GetStorageInfo, GetNumObjects, GetObjectHandles, GetObjectInfo, GetObject, 
-   GetThumb*
+   GetThumb, InitiateCapture*
  - PTP-ops not supported: *DeleteObject, SendObjectInfo, SendObject,
-   InitiateCapture, FormatStore, ResetDevice, SelfTest, SetObjectProtection,
+   FormatStore, ResetDevice, SelfTest, SetObjectProtection,
    PowerDown, GetDevicePropDesc, GetDevicePropValue, SetDevicePropValue,
    ResetDevicePropValue, TerminateOpenCapture, MoveObject, CopyObject, 
    GetPartialObject, InitiateOpenCapture*

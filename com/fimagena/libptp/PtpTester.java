@@ -54,7 +54,7 @@ public class PtpTester {
         System.out.println("ok");
 
         System.out.println("GetDeviceInfo:");
-        PtpDataType.DeviceInfoDataSet deviceInfoDataSet = session.getDeviceInfo();
+        PtpDataType.DeviceInfoDataSet deviceInfoDataSet = session.getConnection().getDeviceInfo();
         System.out.println(deviceInfoDataSet.toString());
 
         System.out.println("GetStorageIDs:");
@@ -89,6 +89,10 @@ public class PtpTester {
             fout.close();
             System.out.println(thumb.toString());
         }
+
+        System.out.println("Initiate capture:");
+        session.initiateCapture();
+        System.out.println("--> success");
 
         connection.close();
     }

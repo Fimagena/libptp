@@ -148,6 +148,18 @@ public class PtpSession {
         return ((PtpDataType.Object) response.getData()).mObject;
     }
 
+    public void initiateCapture() throws PtpTransport.TransportError, PtpExceptions.PtpProtocolViolation, PtpExceptions.OperationFailed {
+        initiateCapture(new PtpDataType.StorageID(0), new PtpDataType.ObjectFormatCode(0));
+    }
+    public void initiateCapture(PtpDataType.StorageID storageID, PtpDataType.ObjectFormatCode objectFormatCode) throws PtpTransport.TransportError, PtpExceptions.PtpProtocolViolation, PtpExceptions.OperationFailed {
+        PtpOperation.Request request = PtpOperation.createRequest(PtpOperation.OPSCODE_InitiateCapture);
+        request.mParameters = new long[]{ storageID.mValue, objectFormatCode.mValue };
+        PtpOperation.Response response = mSession.executeTransaction(request);
+        response.validate();
+        if (!response.isSuccess())
+            throw new PtpExceptions.OperationFailed("GetThumb", response.getResponseCode());
+    }
+
 /*      public void deleteObject() {}
     public void sendObjectInfo() {}
     public void sendObject() {}
@@ -164,6 +176,5 @@ public class PtpSession {
     public void terminateOpenCapture() {}
     public void moveObject() {}
     public void copyObject() {}
-    public void getPartialObject() {}
-    public void initiateOpenCapture() {}  */
+    public void getPartialObject() {} */
 }
