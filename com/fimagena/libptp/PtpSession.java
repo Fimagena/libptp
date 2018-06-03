@@ -157,7 +157,7 @@ public class PtpSession {
         PtpOperation.Response response = mSession.executeTransaction(request);
         response.validate();
         if (!response.isSuccess())
-            throw new PtpExceptions.OperationFailed("GetThumb", response.getResponseCode());
+            throw new PtpExceptions.OperationFailed("InitiateCapture", response.getResponseCode());
     }
 
 /*      public void deleteObject() {}

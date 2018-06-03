@@ -39,7 +39,7 @@ public class PtpOperation {
     public final static int OPSCODE_GetDeviceInfo           = 0x1001; static {OPSCODE_DESCRIPTIONS.put(OPSCODE_GetDeviceInfo         , "GetDeviceInfo"       );}
     public final static int OPSCODE_OpenSession             = 0x1002; static {OPSCODE_DESCRIPTIONS.put(OPSCODE_OpenSession           , "OpenSession"         );}
     public final static int OPSCODE_CloseSession            = 0x1003; static {OPSCODE_DESCRIPTIONS.put(OPSCODE_CloseSession          , "CloseSession"        );}
-    public final static int OPSCODE_GetStorageIDs           = 0x1004; static {OPSCODE_DESCRIPTIONS.put(OPSCODE_GetStorageIDs         , "GetStorgeIDs"        );}
+    public final static int OPSCODE_GetStorageIDs           = 0x1004; static {OPSCODE_DESCRIPTIONS.put(OPSCODE_GetStorageIDs         , "GetStorageIDs"       );}
     public final static int OPSCODE_GetStorageInfo          = 0x1005; static {OPSCODE_DESCRIPTIONS.put(OPSCODE_GetStorageInfo        , "GetStorageInfo"      );}
     public final static int OPSCODE_GetNumObjects           = 0x1006; static {OPSCODE_DESCRIPTIONS.put(OPSCODE_GetNumObjects         , "GetNumObjects"       );}
     public final static int OPSCODE_GetObjectHandles        = 0x1007; static {OPSCODE_DESCRIPTIONS.put(OPSCODE_GetObjectHandles      , "GetObjectHandles"    );}
@@ -71,7 +71,7 @@ public class PtpOperation {
     public static final int RSPCODE_OK                      = 0x2001; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_OK                        , "OK"                      );}
     public static final int RSPCODE_GeneralError            = 0x2002; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_GeneralError              , "GeneralError"            );}
     public static final int RSPCODE_SessionNotOpen          = 0x2003; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_SessionNotOpen            , "SessionNotOpen"          );}
-    public static final int RSPCODE_InvalidTransactionID    = 0x2004; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_InvalidTransactionID      , "InvalidTranscationID"    );}
+    public static final int RSPCODE_InvalidTransactionID    = 0x2004; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_InvalidTransactionID      , "InvalidTransactionID"    );}
     public static final int RSPCODE_OperationNotSupported   = 0x2005; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_OperationNotSupported     , "OperationNotSupported"   );}
     public static final int RSPCODE_ParameterNotSupported   = 0x2006; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_ParameterNotSupported     , "ParameterNotSupported"   );}
     public static final int RSPCODE_IncompleteTransfer      = 0x2007; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_IncompleteTransfer        , "IncompleteTransfer"      );}
@@ -80,7 +80,7 @@ public class PtpOperation {
     public static final int RSPCODE_DevicePropNotSupported  = 0x200A; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_DevicePropNotSupported    , "DevicePropNotSupported"  );}
     public static final int RSPCODE_InvalidObjectFormatCode = 0x200B; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_InvalidObjectFormatCode   , "InvalidObjectFormatCode" );}
     public static final int RSPCODE_StoreFull               = 0x200C; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_StoreFull                 , "StoreFull"               );}
-    public static final int RSPCODE_ObjectWriteProtected    = 0x200D; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_ObjectWriteProtected      , "ObjectWriteProtectd"     );}
+    public static final int RSPCODE_ObjectWriteProtected    = 0x200D; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_ObjectWriteProtected      , "ObjectWriteProtected"    );}
     public static final int RSPCODE_StoreReadOnly           = 0x200E; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_StoreReadOnly             , "StoreReadOnly"           );}
     public static final int RSPCODE_AccessDenied            = 0x200F; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_AccessDenied              , "AccessDenied"            );}
     public static final int RSPCODE_NoThumbnailPresent      = 0x2010; static {RSPCODE_DESCRIPTIONS.put(RSPCODE_NoThumbnailPresent        , "NoThumbNailPresent"      );}
